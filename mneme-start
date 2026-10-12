@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Start the local Mneme stack and open it in the browser.
+# First run: generates the JWT keypair and DB passwords, then builds all images.
+# Pass --build to rebuild images after a `git pull` in one of the service repos.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")"
+
+if [[ ! -f keys/private.pem ]]; then
+  echo "Generating JWT signing keypair in keys/ ..."
+  mkdir -p keys
+  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/private.pem 2>/dev/null
+  openssl pkey -in keys/private.pem -pubout -out keys/public.pem
+  # The containers run as uid 1001, not as you, so the files must be world-readable.
+  chmod 755 keys
+  chmod 644 keys/private.pem keys/public.pem
+fi
+
+if [[ ! -f .env ]]; then
+  echo "Generating database passwords in .env ..."
+  umask 077
+  cat > .env <<EOF
+POSTGRES_PASSWORD=$(openssl rand -hex 16)
+CORE_DB_PASSWORD=$(openssl rand -hex 16)
+AUTH_DB_PASSWORD=$(openssl rand -hex 16)
+WEB_PORT=8000
+EOF
+fi
+
+WEB_PORT=$(grep '^WEB_PORT=' .env | cut -d= -f2)
+WEB_PORT=${WEB_PORT:-8000}
+
+docker compose up -d "$@"
+
+wait_healthy() {
+  local name=$1 url=$2
+  printf 'Waiting for %s ' "$name"
+  for _ in $(seq 1 90); do
+    if curl -fs "$url" >/dev/null 2>&1; then
+      echo ' up'
+      return 0
+    fi
+    printf '.'
+    sleep 2
+  done
+  echo ' timed out'
+  echo "See the logs: docker compose logs $name" >&2
+  return 1
+}
+
+wait_healthy mneme-auth http://localhost:8081/actuator/health
+wait_healthy mneme-core http://localhost:8080/actuator/health
+
+url="http://localhost:${WEB_PORT}"
+echo "Mneme is running at $url"
+if command -v xdg-open >/dev/null; then
+  xdg-open "$url" >/dev/null 2>&1 &
+fi

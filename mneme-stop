@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stop the local Mneme stack. Data stays in the postgres volume.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")"
+
+docker compose stop
+echo "Mneme stopped. Your data is kept."

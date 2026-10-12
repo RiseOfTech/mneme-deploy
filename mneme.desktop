@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mneme
+Comment=Start Mneme and open it in the browser
+# Replaced with the real path by the install command in README.md.
+Exec=sh -c '__DIR__/mneme-start; sleep 3'
+Icon=accessories-dictionary
+Terminal=true
+Categories=Education;
